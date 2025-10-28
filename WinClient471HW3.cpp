@@ -60,7 +60,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Client connected to server.\n";
 
     // Open (or create) log file for both reading and appending
-    std::ifstream infile("WinClient471.txt");
+    std::ifstream infile("MessageLog.txt");
     if (!infile) {
         std::cout << "No prior message log from the server.\n";
     } else {
@@ -78,9 +78,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Open file for appending new entries
-    std::ofstream file("WinClient471.txt", std::ios::app);
+    std::ofstream file("MessageLog.txt", std::ios::app);
     if (!file.is_open()) {
-        std::cerr << "Error: Could not open WinClient471.txt\n";
+        std::cerr << "Error: Could not open MessageLog.txt\n";
         closesocket(s);
         WSACleanup();
         return 1;
