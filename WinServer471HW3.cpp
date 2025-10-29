@@ -11,6 +11,7 @@
 #include <mutex>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <algorithm>
 
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -22,12 +23,18 @@ constexpr int MAX_LINE = 256;
 // Shared amongst threaded users
 std::vector<std::string> messageLog;
 std::mutex logMutex;
+std::vector<SOCKET> clients;  // stores list of connected sockets
+std::mutex clientsMutex; // Prevents race condition between clients, one thread adds, another broadcasts, a third removes clients.
 
 void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
-    std::cout << "Threading successful\n";
     char ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip));
-    std::cout << "Client handler started for: " << ip << '\n';
+
+    // Pulled and repurposed from https://stackoverflow.com/questions/58052740/how-can-i-print-the-value-of-a-port-number && 
+    // https://www.geeksforgeeks.org/cpp/socket-programming-in-cpp/    
+    
+    int port = ntohs(clientAddr.sin_port); 
+
 
     // {
     //     std::lock_guard<std::mutex> lg(logMutex);
@@ -48,8 +55,22 @@ void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
             messageLog.push_back(message);
         }
 
-        std::cout << "Client " << ip << " sent: " << message << '\n';
+        std::string fullMsg = "Client " + std::string(ip) + ":" + std::to_string(port) + " sent: " + message;
+        std::cout << fullMsg << '\n';
 
+        {
+            //mutual exclusion to prevent all clients from trying to send everything to server at the same time,
+            // taken from and repurposed, https://en.cppreference.com/w/cpp/thread/lock_guard.html
+            
+            std::lock_guard<std::mutex> lockname(clientsMutex); 
+
+
+            for (SOCKET other : clients) { // standard for loop using vector of clients to ensure message is sent to all clients except the sender
+                if (other != cSocket) {
+                    send(other, fullMsg.c_str(), static_cast<int>(fullMsg.size()) + 1, 0);
+                }
+            }
+        }
     }
 
     //std::cout << "Thread started for client " << cIP << " (socket" << cSocket << ")\n";
@@ -82,22 +103,24 @@ void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
         //messageLog.push_back(message);
     //}
 
-    if (bytesReceived == 0) {
-        std::cout << "Client " << ip << " disconnected (graceful).\n";
-    } else if (bytesReceived == SOCKET_ERROR) {
-        std::cout << "Client " << ip << " recv error: " << WSAGetLastError() << '\n';
-    }
 
+    
+    std::lock_guard<std::mutex> lockname(clientsMutex);
+
+    //CITATION: ChatGPT for better understanding, https://www.geeksforgeeks.org/cpp/erase-remove-idiom-in-cpp/, https://cplusplus.com/reference/vector/vector/erase/
+    clients.erase(std::remove(clients.begin(), clients.end(), cSocket), clients.end()); 
+    
+    
     closesocket(cSocket);
 
-    std::cout << "Client " << ip << " disconnected." << "\n\n";
+    std::cout << "\nThe client at " + std::string(ip) + ":" + std::to_string(port) + " has disconnected from the server\n\n";
     //closesocket(cSocket);
 
 }
 
 int main(int argc, char* argv[]) {
     WSADATA wsaData;
-    SOCKET s = INVALID_SOCKET
+    SOCKET s = INVALID_SOCKET;
     //new_s = INVALID_SOCKET;
     sockaddr_in sin{};
     //char buf[MAX_LINE];
@@ -135,7 +158,9 @@ int main(int argc, char* argv[]) {
     }
 
     listen(s, MAX_PENDING);
-    std::cout << "Server listening on port " << port << "...\n";
+    std::cout << "Server is at address: 192.168.56.1\n";
+    std::cout << "Server is using port " << port << "...\n";
+    
 
     while (true) {
         sockaddr_in clientAddr{};
@@ -148,18 +173,62 @@ int main(int argc, char* argv[]) {
 
         char ip[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip));
-
+        int clientPort = ntohs(clientAddr.sin_port);
         std::string clientIP = ip;
 
-        std::cout << "Client connected: " << clientIP << std::endl;
+        std::cout << "\nThe client at " << clientIP << ":" << clientPort << " has connected to the server\n";
+
+        if (messageLog.empty()) {
+            std::cout << "The server has no message log to send to this client\n\n";
+        }
+        else {
+            std::cout << "The server sent the message log to this client\n\n";
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(clientsMutex);
+            if (clients.empty()) {
+                std::string noclient = "No other clients connected to the server.\n";
+                send(new_s, noclient.c_str(), static_cast<int>(noclient.size()) + 1, 0);
+            } else {
+                std::string yesclient = "The following client(s) are connected to the server:\n";
+                send(new_s, yesclient.c_str(), static_cast<int>(yesclient.size()) + 1, 0);
+
+                for (SOCKET other : clients) {
+                    if (other != new_s) {
+                        sockaddr_in addr;
+                        int len = sizeof(addr);
+                        getpeername(other, (sockaddr*)&addr, &len); // Citation, https://learn.microsoft.com/en-us/windows/win32/api/winsock/nf-winsock-getpeername, + GPT for understand of how to print
+                        // a corresponding client address
+                        char ip[INET_ADDRSTRLEN];
+                        inet_ntop(AF_INET, &addr.sin_addr, ip, sizeof(ip));
+                        int port = ntohs(addr.sin_port);
+
+                        std::string info = "- " + std::string(ip) + ":" + std::to_string(port) + "\n";
+                        send(new_s, info.c_str(), static_cast<int>(info.size()) + 1, 0);
+                    }
+                }
+            }
+
+            std::string join = "A new client has joined: " + clientIP + ":" + std::to_string(clientPort) + "\n";
+            for (SOCKET other : clients) {
+                if (other != new_s) {
+                    send(other, join.c_str(), static_cast<int>(join.size()) + 1, 0);
+                }
+            }
+            clients.push_back(new_s);
+        }
+    
+        sockaddr_in clientCopy = clientAddr;
+        std::thread newClient(handleClient, new_s, clientCopy);
+        std::lock_guard<std::mutex> lock(clientsMutex);
+        clients.push_back(new_s);
 
         // Citation: Copilot
         // This is a method of multithreading, after an accepted connection has
         // Been established a new thread is made calling a function made above main
         // Allowing each separate user to utilize the function to talk within
         // The server
-        sockaddr_in clientCopy = clientAddr;
-        std::thread newClient(handleClient, new_s, clientCopy);
         //if (newClient.joinable()) {
         //    std::cout << "Thread created successfully for " << clientIP << std::endl;
         //}
@@ -167,25 +236,17 @@ int main(int argc, char* argv[]) {
         //std::cout.flush();
         newClient.detach();
 
-        std::cout << "Detach successful\n";
-
-        // if (messageLog.empty())
-        //     std::cout << "No prior messages to send.\n";
-        // else
-        //     std::cout << "Sending message log to new client (" << messageLog.size() << " entries)\n";
-
-        // int bytesReceived;
-        // while ((bytesReceived = recv(new_s, buf, sizeof(buf), 0)) > 0) {
-        //     std::string message(buf);
-        //     std::cout << "Client " << ip << " sent: " << message << '\n';
-        //     messageLog.push_back(message);
-        // }
+//            int bytesReceived;
+//        while ((bytesReceived = recv(new_s, buf, sizeof(buf), 0)) > 0) {
+//            std::string message(buf);
+//            std::cout << "Client " << ip << " sent: " << message << '\n';
+//            messageLog.push_back(message);
+//        }
 
         // std::cout << "Client " << ip << " disconnected.\n\n";
         // closesocket(new_s);
     }
 
-    file.close();
     closesocket(s);
     WSACleanup();
     return 0;
