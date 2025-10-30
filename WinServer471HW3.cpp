@@ -6,6 +6,7 @@
 #include <vector>
 #include <thread>
 // Citation on info: GeekForGeeks
+// [1] GeeksforGeeks, “Mutex vs Semaphore,” GeeksforGeeks, Apr. 12, 2011. https://www.geeksforgeeks.org/operating-systems/mutex-vs-semaphore/
 // Mutex is a safeguard with threads to allow singluar
 // Usage of resources, a "one at a time" scenario
 #include <mutex>
@@ -26,17 +27,21 @@ std::mutex logMutex;
 std::vector<SOCKET> clients;  // stores list of connected sockets
 std::mutex clientsMutex; // Prevents race condition between clients, one thread adds, another broadcasts, a third removes clients.
 
+// Citation: Copilot in how to a function can be used within a thread
 void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
     char ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &clientAddr.sin_addr, ip, sizeof(ip));
 
-    // Citation: Pulled and repurposed from https://stackoverflow.com/questions/58052740/how-can-i-print-the-value-of-a-port-number && 
-    // https://www.geeksforgeeks.org/cpp/socket-programming-in-cpp/    
+    // Citation: Pulled and repurposed from
+    // [2] How, “Stack Overflow,” Stack Overflow, 2019. https://stackoverflow.com/questions/58052740/how-can-i-print-the-value-of-a-port-number (accessed Oct. 30, 2025).  
+    // [3] GeeksforGeeks, “Socket Programming in C++,” GeeksforGeeks, Dec. 31, 2023. https://www.geeksforgeeks.org/cpp/socket-programming-in-cpp/
     
     int port = ntohs(clientAddr.sin_port); 
 
 
     // {
+           // Citation: understanding what lock_guard is
+           // [4] “std::lock_guard - cppreference.com,” Cppreference.com, 2025. https://en.cppreference.com/w/cpp/thread/lock_guard.html (accessed Oct. 30, 2025).
     //     std::lock_guard<std::mutex> lg(logMutex);
     //     if(messageLog.empty()) {
     //         const char *msg = "No prior messages.\n";
@@ -59,7 +64,7 @@ void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
         std::cout << fullMsg << '\n';
 
         {
-            //mutual exclusion to prevent all clients from trying to send everything to server at the same time,
+            // mutual exclusion to prevent all clients from trying to send everything to server at the same time,
             // taken from and repurposed, https://en.cppreference.com/w/cpp/thread/lock_guard.html
             
             std::lock_guard<std::mutex> lockname(clientsMutex); 
@@ -73,42 +78,44 @@ void handleClient(SOCKET cSocket, sockaddr_in clientAddr) {
         }
     }
 
-    //std::cout << "Thread started for client " << cIP << " (socket" << cSocket << ")\n";
-    //std::cout.flush();
+    // std::cout << "Thread started for client " << cIP << " (socket" << cSocket << ")\n";
+    // std::cout.flush();
 
-    //while ((bytesReceived = recv(cSocket, buf, sizeof(buf), 0)) > 0) {
-    // while (true) {
-    //     char ip[INET]
-    //     memset(buf, 0, sizeof(buf));
-    //     bytesReceived = recv(cSocket, buf, sizeof(buf) - 1, 0);
+    // while ((bytesReceived = recv(cSocket, buf, sizeof(buf), 0)) > 0) {
+    //     while (true) {
+    //          char ip[INET]
+    //          memset(buf, 0, sizeof(buf));
+    //          bytesReceived = recv(cSocket, buf, sizeof(buf) - 1, 0);
 
-        // debugging for if bytes are read
-        //if (bytesReceived <= 0) {
-        //    break;
-        //}
+    //         debugging for if bytes are read
+    //         if (bytesReceived <= 0) {
+    //             break;
+    //         }
 
-        //buf[bytesReceived] = '\0';
-        //std::string message = buf;
+    //         buf[bytesReceived] = '\0';
+    //         std::string message = buf;
 
-        //{
-            // Copilot
-            // This is a recommend usage to ensure safety
-            // When it comes to logging messages
-            //std::lock_guard<std::mutex> lock(logMutex);
-            //messageLog.push_back(message);
-        //}
+    //         {
+                 // Citastion: Copilot
+    //           This is a recommend usage to ensure safety
+    //           When it comes to logging messages
+    //           std::lock_guard<std::mutex> lock(logMutex);
+    //           messageLog.push_back(message);
+    //         }
 
-        //std::cout << "Client " << cIP << " sent: " << message << std::endl;
-        //std::cout << "[Thread " << std::this_thread::get_id() << "} Client " << clientIP << " sent: " << message << std::endl;
-        //messageLog.push_back(message);
-    //}
+    //         std::cout << "Client " << cIP << " sent: " << message << std::endl;
+    //         std::cout << "[Thread " << std::this_thread::get_id() << "} Client " << clientIP << " sent: " << message << std::endl;
+    //         messageLog.push_back(message);
+    //     }
+    // }
 
 
     
     {
         std::lock_guard<std::mutex> lockname(clientsMutex);
-        //CITATION: ChatGPT for better understanding, https://www.geeksforgeeks.org/cpp/erase-remove-idiom-in-cpp/
-        // and https://cplusplus.com/reference/vector/vector/erase/
+        //CITATION: ChatGPT for better understanding and
+        // [5] GeeksforGeeks, “EraseRemove Idiom in C++,” GeeksforGeeks, Apr. 08, 2023. https://www.geeksforgeeks.org/cpp/erase-remove-idiom-in-cpp/ (accessed Oct. 30, 2025).
+        // [6] Cplusplus.com, 2022. https://cplusplus.com/reference/vector/vector/erase/
         clients.erase(std::remove(clients.begin(), clients.end(), cSocket), clients.end());
 
         std::string leaveMsg = "The client at " + std::string(ip) + ":" + std::to_string(port) + " has disconnected from the server.";
@@ -234,19 +241,19 @@ int main(int argc, char* argv[]) {
         // Been established a new thread is made calling a function made above main
         // Allowing each separate user to utilize the function to talk within
         // The server
-        //if (newClient.joinable()) {
-        //    std::cout << "Thread created successfully for " << clientIP << std::endl;
-        //}
-        //std::cout << "Creathed thread (detached) for " << clientIP << " on socket " << new_s << "\n";
-        //std::cout.flush();
+        // if (newClient.joinable()) {
+        //     std::cout << "Thread created successfully for " << clientIP << std::endl;
+        // }
+        // std::cout << "Creathed thread (detached) for " << clientIP << " on socket " << new_s << "\n";
+        // std::cout.flush();
         newClient.detach();
 
-//            int bytesReceived;
-//        while ((bytesReceived = recv(new_s, buf, sizeof(buf), 0)) > 0) {
-//            std::string message(buf);
-//            std::cout << "Client " << ip << " sent: " << message << '\n';
-//            messageLog.push_back(message);
-//        }
+        // int bytesReceived;
+        // while ((bytesReceived = recv(new_s, buf, sizeof(buf), 0)) > 0) {
+        //     std::string message(buf);
+        //     std::cout << "Client " << ip << " sent: " << message << '\n';
+        //     messageLog.push_back(message);
+        // }
 
         // std::cout << "Client " << ip << " disconnected.\n\n";
         // closesocket(new_s);
@@ -256,3 +263,4 @@ int main(int argc, char* argv[]) {
     WSACleanup();
     return 0;
 }
+
