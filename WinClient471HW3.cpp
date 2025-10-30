@@ -1,6 +1,6 @@
 // WinClient471.cpp
 // Final working version (ChatGPT-5, 2025-10-22)
-// Converts C version to modern C++ with proper logging and output formatting
+// HW2 portions Converted from C version to modern C++ with proper logging and output  formatting by GPT
 
 #include <iostream>
 #include <fstream>
@@ -8,12 +8,13 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <thread>
+#include <mutex>
 
 #pragma comment(lib, "Ws2_32.lib")
 std::mutex coutMutex;
 constexpr int SERVER_PORT = 5432;
 constexpr int MAX_LINE = 256;
-
+bool firstEnterMessage = false;
 // Citations:
 // https://pubs.opengroup.org/onlinepubs/007904975/functions/recv.html - For learning recv function
 // https://www.geeksforgeeks.org/c/tcp-server-client-implementation-in-c/ - Similar usage of void func(int sockfd) for TCP implementation
@@ -27,15 +28,16 @@ void recvThread(SOCKET clientsend) {
 
         tempdata[n] = '\0';
         std::string msg(tempdata);
-        std::cout << "\n" << tempdata << std::endl;
-        std::cout << "Enter message to send to server: ";
-    }
-
-    if (n == 0)
-        std::cout << "\nServer disconnected.\n";
-    else
-        std::cout << "\nConnection error: " << WSAGetLastError() << "\n";
+        {
+            std::lock_guard<std::mutex> lock(coutMutex); // https://en.cppreference.com/w/cpp/thread/lock_guard.html
+            std::cout << "\n\n" << tempdata << "\n\n";
+            if (firstEnterMessage) {
+                std::cout << "Enter message to send to server: " << std::flush;
+            }
+        }
+    }   
 }
+
 
 int main(int argc, char* argv[]) {
     WSADATA wsaData;
@@ -94,7 +96,7 @@ int main(int argc, char* argv[]) {
         if (infile.tellg() == 0) {
             std::cout << "No prior message log from the server.\n";
         } else {
-            std::cout << "Client message log:\n";
+            std::cout << "Client received message log:\n";
             infile.seekg(0, std::ios::beg);
             std::string line;
             while (std::getline(infile, line))
@@ -111,13 +113,16 @@ int main(int argc, char* argv[]) {
         WSACleanup();
         return 1;
     }
-
+    firstEnterMessage = true;
     std::string input;
     char buf[MAX_LINE];
 
     // Main message-sending loop
     while (true) {
-        std::cout << "Enter message to send to server: ";
+        {
+            std::lock_guard<std::mutex> lock(coutMutex);
+            std::cout << "Enter message to send to server: ";
+        }
         std::getline(std::cin, input);
 
         if (input == "quit") break;
@@ -139,7 +144,7 @@ int main(int argc, char* argv[]) {
         send(s, buf, len, 0);
     }
 
-    std::cout << "Client disconnected.\n";
+    std::cout << "Client is disconnected from the server.\n";
 
     file.close();
     closesocket(s);
