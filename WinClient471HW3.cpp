@@ -16,9 +16,9 @@ constexpr int SERVER_PORT = 5432;
 constexpr int MAX_LINE = 256;
 bool firstEnterMessage = false;
 // Citations:
-// https://pubs.opengroup.org/onlinepubs/007904975/functions/recv.html - For learning recv function
-// https://www.geeksforgeeks.org/c/tcp-server-client-implementation-in-c/ - Similar usage of void func(int sockfd) for TCP implementation
-// https://learn.microsoft.com/en-us/windows/win32/winsock/complete-client-code Similar use of recv function
+// [1] “recv,” Opengroup.org, 2025. https://pubs.opengroup.org/onlinepubs/007904975/functions/recv.html (accessed Oct. 30, 2025).
+// [2] GeeksforGeeks, “TCP ServerClient implementation in C,” GeeksforGeeks, Sep. 12, 2018. https://www.geeksforgeeks.org/c/tcp-server-client-implementation-in-c/
+// [3] stevewhims, “Complete Winsock Client Code - Win32 apps,” Microsoft.com, Jan. 07, 2021. https://learn.microsoft.com/en-us/windows/win32/winsock/complete-client-code
 // Gpt for better understanding of how each of the codes in this link works.
 
 void recvThread(SOCKET clientsend) {
@@ -151,3 +151,4 @@ int main(int argc, char* argv[]) {
     WSACleanup();
     return 0;
 }
+
